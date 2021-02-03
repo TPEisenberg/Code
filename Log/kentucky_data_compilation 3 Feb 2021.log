@@ -1,0 +1,43 @@
+------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\te48local\Dropbox\Coal Bonding\Code\Log\kentucky_data_compilation 3 Feb 2021.log
+  log type:  text
+ opened on:   3 Feb 2021, 14:27:32
+
+. set more off
+
+. 
+. ************************************************************************************
+. ************************************************************************************
+. /*
+> DO FILE NAME: kentucky_data_compilation.do
+> DO FILE AUTHORS:  Tom Eisenberg
+> SOURCE:  None
+> 
+> PURPOSE: Reads in and manipulates the Kentucky coal bonding data
+> 
+> DATE CREATED: 02/02/2021
+> 
+> NOTES: 
+> 
+> CHANGES:
+> 
+> */
+. 
+. *Files this do file uses
+. ************************************************************************************
+. ******* .dta files
+. local kydata "$MASTER\Data\Bond Spreadsheets\Kentucky\Bonds_and_bond_activities_12032020.xlsx"
+
+. 
+. ** Import original Excel file - takes a while so better off using stata file to start
+. 
+. *import excel using "`kydata'", firstrow 
+. 
+. *save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", replace
+. 
+. use "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", clear
+
+. 
+end of do-file
+
