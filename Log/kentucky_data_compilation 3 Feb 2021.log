@@ -41,3 +41,68 @@
 . 
 end of do-file
 
+. help expand
+
+. tab PERMIT_NUMBER
+too many values
+r(134);
+
+. browse PERMIT_NUMBER
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. keep if PERMIT_NUMBER=="0070019"
+(162,886 observations deleted)
+
+. 
+end of do-file
+
+. browse
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. destring BOND_ISSUE_DATE, replace
+BOND_ISSUE_DATE: contains nonnumeric characters; no replace
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. gen bond_date = date(BOND_ISSUE_DATE, "MDY")
+
+. 
+end of do-file
+
+. browse BOND_ISSUE_DATE bond_date
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. format bond_date %td
+
+. 
+end of do-file
+
+. browse BOND_ISSUE_DATE bond_date
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. format BOND_ACTIVITY_DATE %td
+
+. 
+end of do-file
+
+. browse BOND_ISSUE_DATE bond_date BOND_ACTIVITY_DATE
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. clear all
+
+. 
+. ** Set major file path
+. 
+. global MASTER "C:\Users\te48local\Dropbox\Coal Bonding"
+
+. 
+. ** Standard Header Stuff
+. capture log close

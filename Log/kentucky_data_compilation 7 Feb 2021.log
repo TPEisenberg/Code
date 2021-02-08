@@ -1,0 +1,280 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\te48local\Dropbox\Coal Bonding\Code\Log\kentucky_data_compilation 7 Feb 2021.log
+  log type:  text
+ opened on:   7 Feb 2021, 17:06:15
+
+. set more off
+
+. 
+. ************************************************************************************
+. ************************************************************************************
+. /*
+> DO FILE NAME: kentucky_data_compilation.do
+> DO FILE AUTHORS:  Tom Eisenberg
+> SOURCE:  None
+> 
+> PURPOSE: Reads in and manipulates the Kentucky coal bonding data
+> 
+> DATE CREATED: 02/02/2021
+> 
+> NOTES: 
+> 
+> CHANGES:
+> 
+> */
+. 
+. *Files this do file uses
+. ************************************************************************************
+. ******* .xlsx files
+. local kydata "$MASTER\Data\Bond Spreadsheets\Kentucky\Bonds_and_bond_activities_12032020.xlsx"
+
+. 
+. 
+. * Files this do file produces
+. ************************************************************************************
+. ******* .dta files
+. local kydstata "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta"
+
+. 
+. ** Import original Excel file - takes a while so better off using stata file to start
+. 
+. *import excel using "`kydata'", firstrow 
+. 
+. *save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", replace
+. 
+. ** Import stata file of kentucky bond data
+. 
+. use "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", clear
+
+. 
+. 
+. ** Restrict to TWO permits first for a test case
+. 
+. *keep if ORIGINAL_PERMIT_NUMBER=="0070019" | ORIGINAL_PERMIT_NUMBER=="8260558" | ORIGINAL_PERMIT_NUMBER=="9000022"
+. keep if ORIGINAL_PERMIT_NUMBER=="0070001" | ORIGINAL_PERMIT_NUMBER=="0070008"
+(162,875 observations deleted)
+
+. 
+. * Drop extraneous rows
+. drop if BOND_ACTIVITY_CODE==""
+(1 observation deleted)
+
+. 
+. 
+. * Convert to dates, extrtact relevant years and months
+. gen bond_issue_date = date(BOND_ISSUE_DATE, "MDY")
+
+. gen bond_issue_year = year(bond_issue_date)
+
+. gen bond_issue_month = month(bond_issue_date)
+
+. format bond_issue_date %td
+
+. 
+. gen bond_activity_date = dofc(BOND_ACTIVITY_DATE)
+
+. gen bond_activity_year = year(bond_activity_date)
+
+. gen bond_activity_month = month(bond_activity_date)
+
+. 
+. 
+. * Count how many years a bond is active
+. bysort PERMBOND_ID: egen min_year = min(bond_issue_year)
+
+. bysort PERMBOND_ID: egen max_year = max(bond_activity_year)
+
+. 
+. gen num_years = max_year - min_year
+
+. 
+. 
+. * Get the unique bond totals for each activity line
+. 
+. * Mark which instance of a year a bond shows up
+. sort ORIGINAL_PERMIT_NUMBER PERMBOND_ID bond_issue_year  bond_activity_year bond_activity_month
+
+. 
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID bond_issue_year : gen bond_instance = _n
+
+. 
+. 
+. 
+. * Replace missing bond amounts with 0 (?)
+. replace BOND_AMOUNT_THIS_ACTIVITY = 0 if BOND_AMOUNT_THIS_ACTIVITY==.
+(0 real changes made)
+
+. 
+. 
+. 
+. **** Get bond totals for first instances based on status
+. 
+. * Add reductions for first instances
+. gen running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RD" & bond_instance==1
+(19 missing values generated)
+
+. 
+. * Add part release grading for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RG" & bond_instance==1
+(0 real changes made)
+
+. 
+. * Ignore release denials for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="CD" & bond_instance==1
+(1 real change made)
+
+. 
+. * Ignore release denials for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="PD" & bond_instance==1
+(0 real changes made)
+
+. 
+. * BS: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="BS" & bond_instance==1
+(5 real changes made)
+
+. 
+. * Ignore OS for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="OS" & bond_instance==1
+(0 real changes made)
+
+. 
+. * SF: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SF" & bond_instance==1
+(0 real changes made)
+
+. 
+. * RV: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="RV" & bond_instance==1
+(0 real changes made)
+
+. 
+. * SU: should go to 0 and new total is reflected in new bond
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SU" & bond_instance==1
+(3 real changes made)
+
+. 
+. * Add PAs for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="PA" & bond_instance==1
+(0 real changes made)
+
+. 
+. * RC goes to 0
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RC" & bond_instance==1
+(1 real change made)
+
+. 
+. * Add riders
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RI" & bond_instance==1
+(4 real changes made)
+
+. 
+. 
+. 
+. 
+. forvalues i = 2/4 {
+  2.         
+. 
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="
+> RD" & bond_instance==`i'
+  3. 
+. * Add part release grading for first instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="
+> RG" & bond_instance==`i'
+  4. 
+. 
+. * RV: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="RV"
+>  & bond_instance==`i'
+  5. 
+. * Ignore release denials for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="CD" & bond_instance==`i'
+  6. 
+. 
+. * Ignore OS for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="OS" & bond_instance==`i'
+  7. 
+. * BS: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="BS"
+>  & bond_instance==`i'
+  8. 
+. * SF: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SF"
+>  & bond_instance==`i'
+  9. 
+. * SU: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SU"
+>  & bond_instance==`i'
+ 10. 
+. * Add riders
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="RI"
+>  & bond_instance==`i'
+ 11. 
+. * Add PAs for first instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="PA" 
+> & bond_instance==`i'
+ 12. 
+. * RC goes to 0
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RC" 
+> & bond_instance==`i'
+ 13. 
+. * Ignore release denials for first instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="PD" & bond_instance==`i'
+ 14.         
+. }
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+
+. 
+end of do-file
+
+. browse ORIGINAL_PERMIT_NUMBER PERMIT_NUMBER PERMBOND_ID bond_issue_year bond_activity_year bond_activity_month bond_instance BOND_ACTIVITY_CODE O
+> RIGINAL_BOND_AMOUNT BOND_AMOUNT_THIS_ACTIVITY bond_instance running_bond_total
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. clear all
+
+. 
+. ** Set major file path
+. 
+. global MASTER "C:\Users\te48local\Dropbox\Coal Bonding"
+
+. 
+. ** Standard Header Stuff
+. capture log close

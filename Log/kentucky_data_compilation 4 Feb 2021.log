@@ -1,0 +1,246 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\te48local\Dropbox\Coal Bonding\Code\Log\kentucky_data_compilation 4 Feb 2021.log
+  log type:  text
+ opened on:   4 Feb 2021, 19:46:13
+
+. set more off
+
+. 
+. ************************************************************************************
+. ************************************************************************************
+. /*
+> DO FILE NAME: kentucky_data_compilation.do
+> DO FILE AUTHORS:  Tom Eisenberg
+> SOURCE:  None
+> 
+> PURPOSE: Reads in and manipulates the Kentucky coal bonding data
+> 
+> DATE CREATED: 02/02/2021
+> 
+> NOTES: 
+> 
+> CHANGES:
+> 
+> */
+. 
+. *Files this do file uses
+. ************************************************************************************
+. ******* .xlsx files
+. local kydata "$MASTER\Data\Bond Spreadsheets\Kentucky\Bonds_and_bond_activities_12032020.xlsx"
+
+. 
+. 
+. * Files this do file produces
+. ************************************************************************************
+. ******* .dta files
+. local kydstata "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta"
+
+. 
+. ** Import original Excel file - takes a while so better off using stata file to start
+. 
+. *import excel using "`kydata'", firstrow 
+. 
+. *save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", replace
+. 
+. ** Import stata file of kentucky bond data
+. 
+. use "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", clear
+
+. 
+. 
+. ** Restrict to one permit first for a test case
+. 
+. keep if PERMIT_NUMBER=="0070019"
+(162,886 observations deleted)
+
+. 
+. * Convert to dates, extrtact relevant years and months
+. gen bond_issue_date = date(BOND_ISSUE_DATE, "MDY")
+
+. gen bond_issue_year = year(bond_issue_date)
+
+. gen bond_issue_month = month(bond_issue_date)
+
+. format bond_issue_date %td
+
+. 
+. gen bond_activity_date = dofc(BOND_ACTIVITY_DATE)
+
+. gen bond_activity_year = year(bond_activity_date)
+
+. gen bond_activity_month = month(bond_activity_date)
+
+. 
+. 
+. * Count how many years a bond is active, then expand all observations by that many
+. bysort PERMBOND_ID: egen min_year = min(bond_issue_year)
+
+. bysort PERMBOND_ID: egen max_year = max(bond_activity_year)
+
+. 
+. gen num_years = max_year - min_year
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. sort bond_issue_year PERMBOND_ID
+
+. 
+end of do-file
+
+. browse bond_issue_year PERMBOND_ID
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. sort bond_issue_year PERMBOND_ID bond_activity_year
+
+. 
+end of do-file
+
+. browse bond_issue_year PERMBOND_ID bond_activity_year
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. by PERMBOND_ID: gen bond_instance = _n
+not sorted
+r(5);
+
+end of do-file
+
+r(5);
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. by bond_issue_year PERMBOND_ID: gen bond_instance = _n
+
+. 
+end of do-file
+
+. browse PERMBOND_ID bond_issue_year bond_activity_year bond_instance BOND_ACTIVITY_CODE BOND_AMOUNT_THIS_ACTIVITY
+
+. browse PERMBOND_ID bond_issue_year bond_activity_year bond_instance BOND_ACTIVITY_CODE ORIGINAL_BOND_AMOUNT BOND_AMOUNT_THIS_ACTIVITY
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. gen running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RD" & bond_instance==1
+(7 missing values generated)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RG" & bond_instance==1
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="CD" & bond_instance==1
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="BS" & bond_instance==1
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RD" & bond_instance==2
+(0 real changes made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RG" & bond_instance==2
+(0 real changes made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="CD" & bond_instance==2
+(0 real changes made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="BS" & bond_instance==2
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. * Ignore OS for first instances (SHOULDN'T CHANGE LIABILITY TOTAL BUT IS IMPORTANT)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="OS" & bond_instance==1
+(0 real changes made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. * Ignore SF for first instances (SHOULDN'T CHANGE LIABILITY TOTAL BUT IS IMPORTANT)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="SF" & bond_instance==1
+(0 real changes made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. * Ignore SF for first instances (SHOULDN'T CHANGE LIABILITY TOTAL BUT IS IMPORTANT)
+. replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="SF" & bond_instance==2
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. * Ignore SF for first instances (SHOULDN'T CHANGE LIABILITY TOTAL BUT IS IMPORTANT)
+. replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="OS" & bond_instance==3
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. * Ignore SF for first instances (SHOULDN'T CHANGE LIABILITY TOTAL BUT IS IMPORTANT)
+. replace running_bond_total = 0 if BOND_ACTIVITY_CODE=="RV" & bond_instance==4
+(1 real change made)
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD5070_000000.tmp"
+
+. clear all
+
+. 
+. ** Set major file path
+. 
+. global MASTER "C:\Users\te48local\Dropbox\Coal Bonding"
+
+. 
+. ** Standard Header Stuff
+. capture log close
