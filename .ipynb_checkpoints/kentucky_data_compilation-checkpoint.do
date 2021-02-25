@@ -290,4 +290,3 @@ by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond
 }
 
 save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.dta", replace
-export excel using "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.xlsx", replace

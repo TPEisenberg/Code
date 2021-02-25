@@ -1,0 +1,874 @@
+------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\te48local\Dropbox\Coal Bonding\Code\Log\kentucky_data_compilation18 Feb 2021.log
+  log type:  text
+ opened on:  18 Feb 2021, 11:44:16
+
+. set more off
+
+. 
+. ************************************************************************************
+. ************************************************************************************
+. /*
+> DO FILE NAME: kentucky_data_compilation.do
+> DO FILE AUTHORS:  Tom Eisenberg
+> SOURCE:  None
+> 
+> PURPOSE: Reads in and manipulates the Kentucky coal bonding data
+> 
+> DATE CREATED: 02/02/2021
+> 
+> NOTES: 
+> 
+> CHANGES:
+> 
+> */
+. 
+. *Files this do file uses
+. ************************************************************************************
+. ******* .xlsx files
+. local kydata "$MASTER\Data\Bond Spreadsheets\Kentucky\Bonds_and_bond_activities_12032020.xlsx"
+
+. 
+. 
+. * Files this do file produces
+. ************************************************************************************
+. ******* .dta files
+. local kydstata "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta"
+
+. 
+. ** Import original Excel file - takes a while so better off using stata file to start
+. 
+. *import excel using "`kydata'", firstrow 
+. 
+. *save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", replace
+. 
+. ** Import stata file of kentucky bond data
+. 
+. use "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_raw_stata.dta", clear
+
+. 
+. 
+. /*
+> ** Restrict to TWO permits first for a test case
+> 
+> *keep if ORIGINAL_PERMIT_NUMBER=="0070019" | ORIGINAL_PERMIT_NUMBER=="8260558" | ORIGINAL_PERMIT_NUMBER=="9000022"
+> *keep if ORIGINAL_PERMIT_NUMBER=="0070001" | ORIGINAL_PERMIT_NUMBER=="0070008" | ORIGINAL_PERMIT_NUMBER=="9020013" | ORIGINA
+> L_PERMIT_NUMBER=="9170012"
+> */
+. 
+. * Drop extraneous rows
+. drop if BOND_ACTIVITY_CODE==""
+(4,343 observations deleted)
+
+. 
+. 
+. * Convert to dates, extrtact relevant years and months
+. gen bond_issue_date = date(BOND_ISSUE_DATE, "MDY")
+(20 missing values generated)
+
+. gen bond_issue_year = year(bond_issue_date)
+(20 missing values generated)
+
+. gen bond_issue_month = month(bond_issue_date)
+(20 missing values generated)
+
+. format bond_issue_date %td
+
+. 
+. gen bond_activity_date = dofc(BOND_ACTIVITY_DATE)
+
+. gen bond_activity_year = year(bond_activity_date)
+
+. gen bond_activity_month = month(bond_activity_date)
+
+. 
+. 
+. * Count how many years a bond is active
+. bysort PERMBOND_ID: egen min_year = min(bond_issue_year)
+(20 missing values generated)
+
+. bysort PERMBOND_ID: egen max_year = max(bond_activity_year)
+
+. 
+. gen num_years = max_year - min_year
+(20 missing values generated)
+
+. 
+. 
+. * Get the unique bond totals for each activity line
+. 
+. * Mark which instance of a year a bond shows up
+. sort ORIGINAL_PERMIT_NUMBER PERMBOND_ID bond_issue_year  bond_activity_year bond_activity_month
+
+. 
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID bond_issue_year : gen bond_instance = _n
+
+. 
+. 
+. 
+. * Replace missing bond amounts with 0 (?)
+. replace BOND_AMOUNT_THIS_ACTIVITY = 0 if BOND_AMOUNT_THIS_ACTIVITY==.
+(4,515 real changes made)
+
+. 
+. 
+. 
+. **** Get bond totals for first instances based on status
+. 
+. * Add reductions for first instances
+. gen running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RD" & bond_instance==1
+(152,393 missing values generated)
+
+. 
+. * Add part release grading for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RG" & bond_instance==1
+(15,814 real changes made)
+
+. 
+. * Ignore release denials for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="CD" & bond_instance==1
+(814 real changes made)
+
+. 
+. * Ignore release denials for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT if BOND_ACTIVITY_CODE=="PD" & bond_instance==1
+(1,002 real changes made)
+
+. 
+. * BS: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="BS" & bond_instance==
+> 1
+(16,114 real changes made)
+
+. 
+. * Ignore OS for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="OS" & bond_instance==1
+(820 real changes made)
+
+. 
+. * SF: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SF" & bond_instance==
+> 1
+(11 real changes made)
+
+. 
+. * RV: should go to 0 and new total is reflected in new bond (if there is one)
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="RV" & bond_instance==
+> 1
+(464 real changes made)
+
+. 
+. * SU: should go to 0 and new total is reflected in new bond
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY  if BOND_ACTIVITY_CODE=="SU" & bond_instance==
+> 1
+(15,093 real changes made)
+
+. 
+. * Add PAs for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="PA" & bond_instance==1
+(2,169 real changes made)
+
+. 
+. * Add UCs for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="UC" & bond_instance==1
+(17 real changes made)
+
+. 
+. * Add AMs for first instances - looks like it can alter amounts
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="AM" & bond_instance==1
+(288 real changes made)
+
+. 
+. * Add OPs for first instances - looks like it can alter amounts
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="OP" & bond_instance==1
+(205 real changes made)
+
+. 
+. * RC goes to 0
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RC" & bond_instance==1
+(18,083 real changes made)
+
+. 
+. * Add riders
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="RI" & bond_instance==1
+(6,923 real changes made)
+
+. 
+. * Add complete overlaps
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="OL" & bond_instance==1
+(722 real changes made)
+
+. 
+. * Add forfeitures
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="FF" & bond_instance==1
+(275 real changes made)
+
+. 
+. * Add DRs
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="DR" & bond_instance==1
+(1,200 real changes made)
+
+. 
+. * Add AOs
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="AO" & bond_instance==1
+(170 real changes made)
+
+. 
+. * Add VFs
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT + BOND_AMOUNT_THIS_ACTIVITY if BOND_ACTIVITY_CODE=="VF" & bond_instance==1
+(74 real changes made)
+
+. 
+. * Ignore DF for first instances - FF is the actual action
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="DF" & bond_instance==1
+(1,587 real changes made)
+
+. 
+. * Ignore OF for first instances - FF is the actual action
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="OF" & bond_instance==1
+(323 real changes made)
+
+. 
+. * Ignore NF for first instances - FF is the actual action
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="NF" & bond_instance==1
+(605 real changes made)
+
+. 
+. * Ignore LU for first instances
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="LU" & bond_instance==1
+(5 real changes made)
+
+. 
+. * Ignore FE for first instances - FF is the actual action
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="FE" & bond_instance==1
+(2 real changes made)
+
+. 
+. * Ignore HP
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="HP" & bond_instance==1
+(220 real changes made)
+
+. 
+. * Ignore LS
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="LS" & bond_instance==1
+(17 real changes made)
+
+. 
+. * Ignore DL
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="DL" & bond_instance==1
+(46 real changes made)
+
+. 
+. * Ignore UD
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="UD" & bond_instance==1
+(104 real changes made)
+
+. 
+. * Ignore FL--seems to happen when a DF doesn't fully go through
+. replace running_bond_total = ORIGINAL_BOND_AMOUNT  if BOND_ACTIVITY_CODE=="UD" & bond_instance==1
+(0 real changes made)
+
+. 
+. 
+. * Max number of bond instances is 15
+. 
+. forvalues i = 2/15 {
+  2.         
+. 
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="RD" & bond_instance==`i'
+  3. 
+. * Add part release grading for first instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="RG" & bond_instance==`i'
+  4. 
+. 
+. * RV: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY  if
+>  BOND_ACTIVITY_CODE=="RV" & bond_instance==`i'
+  5. 
+. * Ignore release denials for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="CD" & b
+> ond_instance==`i'
+  6. 
+. 
+. * Ignore OS for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1]  if BOND_ACTIVITY_CODE=="OS" & 
+> bond_instance==`i'
+  7. 
+. * BS: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY  if
+>  BOND_ACTIVITY_CODE=="BS" & bond_instance==`i'
+  8. 
+. * SF: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY  if
+>  BOND_ACTIVITY_CODE=="SF" & bond_instance==`i'
+  9. 
+. * SU: should go to 0 and new total is reflected in new bond
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY  if
+>  BOND_ACTIVITY_CODE=="SU" & bond_instance==`i'
+ 10. 
+. * Add riders
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY  if
+>  BOND_ACTIVITY_CODE=="RI" & bond_instance==`i'
+ 11. 
+. * Add PAs for first instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="PA" & bond_instance==`i'
+ 12. 
+. * RC goes to 0
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="RC" & bond_instance==`i'
+ 13. 
+. * FF goes to 0
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="FF" & bond_instance==`i'
+ 14. 
+. * Ignore release denials for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="PD" & b
+> ond_instance==`i'
+ 15. 
+. * Ignore DF for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="DF" & b
+> ond_instance==`i'
+ 16. 
+. * Ignore OF for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="OF" & b
+> ond_instance==`i'
+ 17. 
+. * Ignore LU for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="LU" & b
+> ond_instance==`i'
+ 18. 
+. * Ignore OS for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="OS" & b
+> ond_instance==`i'
+ 19. 
+. * Ignore NF for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="NF" & b
+> ond_instance==`i'
+ 20. 
+. * Ignore NF for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="NF" & b
+> ond_instance==`i'
+ 21. 
+. * Ignore HP for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="HP" & b
+> ond_instance==`i'
+ 22. 
+. * Ignore LS for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="LS" & b
+> ond_instance==`i'
+ 23. 
+. * Ignore LS for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="FE" & b
+> ond_instance==`i'
+ 24.         
+. * Ignore DL for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="DL" & b
+> ond_instance==`i'   
+ 25. 
+. * Ignore UD for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="UD" & b
+> ond_instance==`i'   
+ 26. 
+. 
+. * Ignore FL for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] if BOND_ACTIVITY_CODE=="FL" & b
+> ond_instance==`i'   
+ 27. 
+. * Add AMs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="AM" & bond_instance==`i'
+ 28. 
+. * Add OPs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="OP" & bond_instance==`i'
+ 29. 
+. * Add UCss for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="UC" & bond_instance==`i'
+ 30. 
+. * Add OLs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="OL" & bond_instance==`i'
+ 31. 
+. * Add DRs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="DR" & bond_instance==`i'
+ 32. 
+. * Add AOs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="AO" & bond_instance==`i'
+ 33. 
+. * Add VFs for all instances
+. by ORIGINAL_PERMIT_NUMBER PERMBOND_ID: replace running_bond_total = running_bond_total[_n-1] + BOND_AMOUNT_THIS_ACTIVITY if 
+> BOND_ACTIVITY_CODE=="VF" & bond_instance==`i'
+ 34. 
+. }
+(4387 real changes made)
+(7047 real changes made)
+(498 real changes made)
+(676 real changes made)
+(1387 real changes made)
+(3776 real changes made)
+(32 real changes made)
+(3030 real changes made)
+(2297 real changes made)
+(321 real changes made)
+(6746 real changes made)
+(724 real changes made)
+(388 real changes made)
+(590 real changes made)
+(734 real changes made)
+(36 real changes made)
+(0 real changes made)
+(226 real changes made)
+(0 real changes made)
+(333 real changes made)
+(64 real changes made)
+(9 real changes made)
+(190 real changes made)
+(93 real changes made)
+(158 real changes made)
+(73 real changes made)
+(121 real changes made)
+(29 real changes made)
+(126 real changes made)
+(471 real changes made)
+(100 real changes made)
+(82 real changes made)
+(1008 real changes made)
+(2812 real changes made)
+(219 real changes made)
+(527 real changes made)
+(592 real changes made)
+(2197 real changes made)
+(72 real changes made)
+(1508 real changes made)
+(871 real changes made)
+(92 real changes made)
+(4531 real changes made)
+(1686 real changes made)
+(163 real changes made)
+(354 real changes made)
+(331 real changes made)
+(205 real changes made)
+(0 real changes made)
+(97 real changes made)
+(0 real changes made)
+(232 real changes made)
+(169 real changes made)
+(19 real changes made)
+(466 real changes made)
+(35 real changes made)
+(174 real changes made)
+(33 real changes made)
+(68 real changes made)
+(21 real changes made)
+(81 real changes made)
+(195 real changes made)
+(65 real changes made)
+(80 real changes made)
+(365 real changes made)
+(827 real changes made)
+(115 real changes made)
+(204 real changes made)
+(332 real changes made)
+(721 real changes made)
+(61 real changes made)
+(482 real changes made)
+(402 real changes made)
+(35 real changes made)
+(2203 real changes made)
+(1121 real changes made)
+(59 real changes made)
+(127 real changes made)
+(126 real changes made)
+(293 real changes made)
+(0 real changes made)
+(46 real changes made)
+(0 real changes made)
+(144 real changes made)
+(169 real changes made)
+(17 real changes made)
+(266 real changes made)
+(18 real changes made)
+(133 real changes made)
+(13 real changes made)
+(27 real changes made)
+(32 real changes made)
+(10 real changes made)
+(82 real changes made)
+(35 real changes made)
+(73 real changes made)
+(149 real changes made)
+(270 real changes made)
+(34 real changes made)
+(107 real changes made)
+(162 real changes made)
+(249 real changes made)
+(29 real changes made)
+(206 real changes made)
+(181 real changes made)
+(14 real changes made)
+(685 real changes made)
+(630 real changes made)
+(29 real changes made)
+(66 real changes made)
+(59 real changes made)
+(182 real changes made)
+(0 real changes made)
+(22 real changes made)
+(0 real changes made)
+(76 real changes made)
+(98 real changes made)
+(7 real changes made)
+(146 real changes made)
+(8 real changes made)
+(77 real changes made)
+(0 real changes made)
+(19 real changes made)
+(32 real changes made)
+(7 real changes made)
+(44 real changes made)
+(13 real changes made)
+(34 real changes made)
+(54 real changes made)
+(121 real changes made)
+(16 real changes made)
+(45 real changes made)
+(85 real changes made)
+(77 real changes made)
+(22 real changes made)
+(74 real changes made)
+(104 real changes made)
+(4 real changes made)
+(266 real changes made)
+(283 real changes made)
+(19 real changes made)
+(26 real changes made)
+(31 real changes made)
+(94 real changes made)
+(0 real changes made)
+(4 real changes made)
+(0 real changes made)
+(41 real changes made)
+(62 real changes made)
+(2 real changes made)
+(69 real changes made)
+(4 real changes made)
+(29 real changes made)
+(0 real changes made)
+(3 real changes made)
+(29 real changes made)
+(2 real changes made)
+(26 real changes made)
+(2 real changes made)
+(8 real changes made)
+(21 real changes made)
+(49 real changes made)
+(2 real changes made)
+(31 real changes made)
+(30 real changes made)
+(47 real changes made)
+(18 real changes made)
+(32 real changes made)
+(48 real changes made)
+(1 real change made)
+(110 real changes made)
+(165 real changes made)
+(10 real changes made)
+(19 real changes made)
+(5 real changes made)
+(42 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(25 real changes made)
+(22 real changes made)
+(1 real change made)
+(36 real changes made)
+(1 real change made)
+(22 real changes made)
+(2 real changes made)
+(1 real change made)
+(13 real changes made)
+(0 real changes made)
+(12 real changes made)
+(0 real changes made)
+(3 real changes made)
+(15 real changes made)
+(26 real changes made)
+(12 real changes made)
+(13 real changes made)
+(11 real changes made)
+(17 real changes made)
+(7 real changes made)
+(17 real changes made)
+(18 real changes made)
+(3 real changes made)
+(45 real changes made)
+(67 real changes made)
+(0 real changes made)
+(13 real changes made)
+(4 real changes made)
+(27 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(8 real changes made)
+(16 real changes made)
+(0 real changes made)
+(22 real changes made)
+(3 real changes made)
+(8 real changes made)
+(0 real changes made)
+(1 real change made)
+(10 real changes made)
+(1 real change made)
+(7 real changes made)
+(0 real changes made)
+(0 real changes made)
+(5 real changes made)
+(14 real changes made)
+(1 real change made)
+(10 real changes made)
+(5 real changes made)
+(8 real changes made)
+(3 real changes made)
+(8 real changes made)
+(14 real changes made)
+(0 real changes made)
+(26 real changes made)
+(40 real changes made)
+(1 real change made)
+(7 real changes made)
+(2 real changes made)
+(8 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(7 real changes made)
+(13 real changes made)
+(0 real changes made)
+(6 real changes made)
+(1 real change made)
+(4 real changes made)
+(0 real changes made)
+(0 real changes made)
+(7 real changes made)
+(0 real changes made)
+(3 real changes made)
+(0 real changes made)
+(0 real changes made)
+(3 real changes made)
+(5 real changes made)
+(1 real change made)
+(4 real changes made)
+(4 real changes made)
+(2 real changes made)
+(1 real change made)
+(3 real changes made)
+(9 real changes made)
+(0 real changes made)
+(16 real changes made)
+(15 real changes made)
+(0 real changes made)
+(6 real changes made)
+(2 real changes made)
+(7 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(4 real changes made)
+(0 real changes made)
+(2 real changes made)
+(1 real change made)
+(3 real changes made)
+(0 real changes made)
+(1 real change made)
+(4 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(3 real changes made)
+(0 real changes made)
+(4 real changes made)
+(4 real changes made)
+(1 real change made)
+(1 real change made)
+(5 real changes made)
+(3 real changes made)
+(0 real changes made)
+(7 real changes made)
+(6 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(4 real changes made)
+(2 real changes made)
+(0 real changes made)
+(3 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(3 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(2 real changes made)
+(2 real changes made)
+(0 real changes made)
+(2 real changes made)
+(4 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(3 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(2 real changes made)
+(5 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(2 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+
+. 
+. save "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.dta", replace
+(note: file C:\Users\te48local\Dropbox\Coal Bonding\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.dta not found)
+file C:\Users\te48local\Dropbox\Coal Bonding\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.dta saved
+
+. 
+end of do-file
+
+. do "C:\Users\TE48LO~1\AppData\Local\Temp\STD8584_000000.tmp"
+
+. export excel using "$MASTER\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.xlsx", replace
+file C:\Users\te48local\Dropbox\Coal Bonding\Data\Bond Spreadsheets\Kentucky\kentucky_running_totals.xlsx saved
+
+. 
+end of do-file
+
